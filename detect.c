@@ -7,7 +7,7 @@
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Stewart Sentanoe & Tamas K Lengyel");
-MODULE_DESCRIPTION("A simple Linux driver for detect DRAKVUF presence");
+MODULE_DESCRIPTION("A simple Linux driver to detect DRAKVUF presence");
 MODULE_VERSION("0.1");
 
 int g_time_interval = 100;
@@ -33,28 +33,44 @@ void test_syscall_entry(void)
 void test_shadow_page(void)
 {
 	//declare 2 pointers
-	unsigned char *my_ptr1;
-	unsigned char *my_ptr2;
+	unsigned char *my_ptr1 = NULL;
+	unsigned char *my_ptr2 = NULL;
 
 	//need to use this function since DRAKVUF will add another memory
 	//beyond the physical
-	request_mem_region((unsigned long)0xff006930, 2, "BP1");
+	if ( !request_mem_region((unsigned long)0xff006930, 2, "BP1") )
+    {
+        printk(KERN_INFO "could not request mem region 0xff006930\n");
+        return;
+    }
 
 	//point the first pointer to the shadow copy address (RPA)
 	my_ptr1 = (unsigned char *) ioremap((unsigned long)0xff006930,2);
+    if ( !my_ptr1 )
+    {
+        printk(KERN_INFO "could not ioremap\n");
+        return;
+    }
 
 	//write 'A' to it
 	writeb('A', my_ptr1);
-
-	//check if 'A' is there
-	printk(KERN_INFO "BP1: %02X\n", *my_ptr1);
 
 	//unmap
 	iounmap(my_ptr1);
 
 	//point to the second address where we expect 'A' to be there
-	request_mem_region((unsigned long)0xff007930, 2, "BP2");
+	if ( !request_mem_region((unsigned long)0xff007930, 2, "BP2") )
+    {
+        printk(KERN_INFO "could not request mem region 0xff006930\n");
+        return;
+    }
+
 	my_ptr2 = (unsigned char *) ioremap((unsigned long)0xff007930, 2);
+    if ( !my_ptr2 )
+    {
+        printk(KERN_INFO "could not ioremap\n");
+        return;
+    }
 
 	//print the content of BP2
 	printk(KERN_INFO "BP2: %02X\n", *my_ptr2);
@@ -70,6 +86,9 @@ void test_shadow_page(void)
 
         printk(KERN_INFO "DRAKVUF shadow page detected");
     }
+
+	//unmap
+	iounmap(my_ptr2);
 }
 
 void _TimerHandler(struct timer_list *timer)
@@ -92,6 +111,7 @@ static int __init detect_init(void){
 
 
 static void __exit detect_exit(void){
+	del_timer(&g_timer);
 }
 
 module_init(detect_init);
